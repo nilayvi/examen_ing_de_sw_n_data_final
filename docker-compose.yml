@@ -1,0 +1,12 @@
+services:
+  linux-env:
+    build: .
+    container_name: linux_env_container
+    volumes:
+      - ./:/workspace
+    ports:
+      - "8080:8080"
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+    command: /workspace/.venv/bin/airflow standalone
