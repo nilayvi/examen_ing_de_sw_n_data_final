@@ -38,33 +38,15 @@ WAREHOUSE_PATH = BASE_DIR / "warehouse/medallion.duckdb"
 
 def run_dbt_tests(ti=None, **context):
     """Run dbt tests and save results to quality directory."""
-    # Get execution date from context
-    logical_date = (
-        context.get("data_interval_start")
-        or context.get("logical_date")
-        or context.get("execution_date")
-        or pendulum.now("UTC")
-    )
-
-    if logical_date is None:
-        logical_date = pendulum.now("UTC")
-
-    if hasattr(logical_date, "strftime"):
-        ds_nodash = logical_date.strftime("%Y%m%d")
-    else:
-        ds_nodash = pendulum.now("UTC").strftime("%Y%m%d")
+    ds_nodash = _resolve_ds_nodash(context)
 
     print(f"Running dbt tests for ds_nodash: {ds_nodash}")
 
-    # Run dbt test
     result = _run_dbt_command("test", ds_nodash)
-
-    # Parse the results - dbt test returns non-zero if tests fail
     test_status = "passed" if result.returncode == 0 else "failed"
 
-    # Create results JSON
     results = {
-        "date": ds_nodash,
+        "ds_nodash": ds_nodash,
         "status": test_status,
         "return_code": result.returncode,
         "stdout": result.stdout,
@@ -72,48 +54,28 @@ def run_dbt_tests(ti=None, **context):
         "timestamp": pendulum.now("UTC").isoformat(),
     }
 
-    # Save to quality directory
     quality_file = QUALITY_DIR / f"dq_results_{ds_nodash}.json"
     QUALITY_DIR.mkdir(parents=True, exist_ok=True)
 
-    with open(quality_file, "w") as f:
+    with open(quality_file, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
 
     print(f"Test results saved to: {quality_file}")
     print(f"Overall status: {test_status}")
 
-    # Don't raise exception on test failures, just log them
     if test_status == "failed":
-        print(f"WARNING: Some tests failed. Check {quality_file} for details.")
+        raise AirflowException(
+            "dbt tests failed. Check the JSON result file for details."
+        )
 
     return results
 
 
 def run_dbt_silver(ti=None, **context):
     """Run dbt silver layer models."""
-    # Debug: print available context keys
     print(f"Available context keys: {list(context.keys())}")
 
-    # Get execution date from context - try multiple possible keys
-    logical_date = (
-        context.get("logical_date")
-        or context.get("execution_date")
-        or context.get("data_interval_start")
-        or context.get("run_id")  # Last resort, parse from run_id
-    )
-
-    print(f"Logical date found: {logical_date}, type: {type(logical_date)}")
-
-    # If we still don't have a date, use current date
-    if logical_date is None:
-        logical_date = pendulum.now("UTC")
-
-    # Handle both pendulum and datetime objects
-    if hasattr(logical_date, "strftime"):
-        ds_nodash = logical_date.strftime("%Y%m%d")
-    else:
-        # Fallback: use today's date
-        ds_nodash = pendulum.now("UTC").strftime("%Y%m%d")
+    ds_nodash = _resolve_ds_nodash(context)
 
     print(f"Using ds_nodash: {ds_nodash}")
 
@@ -203,6 +165,27 @@ def _gold_dbt_tests(ds_nodash: str, **_) -> None:
 
     if result.returncode != 0:
         raise AirflowException("dbt test falló. Ver archivo de resultados y logs.")
+
+
+def _resolve_ds_nodash(context: dict) -> str:
+    """Obtain the execution date (YYYYMMDD) from the Airflow context."""
+    ds_nodash = context.get("ds_nodash")
+    if ds_nodash:
+        return str(ds_nodash)
+
+    logical_date = (
+        context.get("data_interval_start")
+        or context.get("logical_date")
+        or context.get("execution_date")
+    )
+
+    if logical_date:
+        if hasattr(logical_date, "strftime"):
+            return logical_date.strftime("%Y%m%d")
+        if hasattr(logical_date, "format"):
+            return logical_date.format("YYYYMMDD")
+
+    return pendulum.now("UTC").strftime("%Y%m%d")
 
 
 def build_dag() -> DAG:
