@@ -32,7 +32,20 @@ Este proyecto crea un pipeline de 3 pasos que replica la arquitectura medallion:
 ```
 
 ## Requisitos
+Se puede correr con docker o manual es indistinto. Se recomienda probar con docker puesto que es mas simple
+### Ejecución con Docker
 
+Es importante cuando se hace docker compose up esperar a que  termine de levantar, si se hace -d no se puede ver con claridad cuando esto pasa y  el 
+docker esta hecho para levantar airflow directamente.
+```
+docker-compose build --no-cache
+docker-compose up 
+```
+Una vez que termino de levantar ir a http://localhost:8080 e iniciar el dag porque aparece deshabilitado. Este comenzara a cargar todos los archivos que hay en raw. 
+Si hay algún problema de loguin probar en modo incógniot y/o borrar cookies porque airflow deja cookies y sessiones que complican el login.
+
+
+### Ejecución manual
 - Python 3.10+
 - DuckDB CLI opcional para inspeccionar la base.
 
@@ -53,6 +66,7 @@ export DBT_PROFILES_DIR=$(pwd)/profiles
 export DUCKDB_PATH=$(pwd)/warehouse/medallion.duckdb
 export AIRFLOW__CORE__DAGS_FOLDER=$(pwd)/dags
 export AIRFLOW__CORE__LOAD_EXAMPLES=False
+export PYTHONPATH=$(pwd)
 export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 ```
 

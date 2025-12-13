@@ -1,5 +1,4 @@
-rm -rf airflow_home/logs/
-rm airflow_home/airflow.db
+rm -rf airflow_home
 rm data/clean/transactions*
 rm data/quality/dq_results*
 rm data/raw/transactions_20251202.csv
